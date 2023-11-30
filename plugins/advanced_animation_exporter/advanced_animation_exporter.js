@@ -8,7 +8,7 @@ Plugin.register("advanced_animation_exporter", {
     description: "Exports animations to Java code for use with Alexander's Advanced Animation Utils",
     about: "This plugin adds the ability to export animations to Java code for use with Alexander's Advanced Animation Utils, which, among other things, allows for Molang to be used in mods for Minecraft: Java Edition"
             + "<br/><br/>The plugin also adds the Display tab to the Modded Entity format, which can be useful if you want to use an entity model for an item"
-            + "<br/><br/>More information about Alexander's Advanced Animation Utils is available at (no link yet lol)",
+        + "<br/><br/>More information about Alexander's Advanced Animation Utils is available at https://github.com/AlexandersFunAndGames/Advanced-Animation-Utils/tree/main",
     version: "1.0.0",
     variant: "both",
     tags: ["Minecraft: Java Edition", "Animation", "Exporter"],
