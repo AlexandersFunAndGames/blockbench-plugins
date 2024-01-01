@@ -1,5 +1,7 @@
 (function () {
 
+    let animationsToExport = [];
+
 // Registers the plugin
 Plugin.register("advanced_animation_exporter", {
     title: "Alexander's Advanced Animation Exporter",
@@ -16,6 +18,7 @@ Plugin.register("advanced_animation_exporter", {
         // Adds Animation Mode and Display Mode to the Modded Entity format
         Formats.modded_entity.animation_mode = true;
         Formats.modded_entity.display_mode = true;
+        //MenuBar.menus.get("export_advanced_animations");
 
         // Adds the plugin's menu button
         menuButton = new Action("export_advanced_animations", {
@@ -25,11 +28,7 @@ Plugin.register("advanced_animation_exporter", {
             condition: () => Format.animation_mode,
 
             click() {
-                Blockbench.export({
-                    type: "Java File",
-                    extensions: ["java"],
-                    content: createFileText()
-                });
+                chooseAnimationsToExport();
             },
         });
         MenuBar.addAction(menuButton, "file.export");
@@ -44,12 +43,56 @@ Plugin.register("advanced_animation_exporter", {
     },
 });
 
+    // Allows the user to choose the animations to be exported
+    function chooseAnimationsToExport() {
+        let form = {};
+        let keys = [];
+        let animations = Animation.all.slice();
+        if (Format.animation_files) animations.sort((a1, a2) => a1.path.hashCode() - a2.path.hashCode());
+        animations.forEach(animation => {
+            let key = animation.name;
+            keys.push(key)
+            form[key.hashCode()] = { label: key, type: 'checkbox', value: true };
+        })
+
+        // Creates the dialog box
+        let dialog = new Dialog("select_animations", {
+            id: "select_animations",
+            title: "Select Animations to Export",
+            form,
+            onConfirm(form_result) {
+                dialog.hide();
+                keys = keys.filter(key => form_result[key.hashCode()]);
+                let animations = keys.map(k => Animation.all.find(anim => anim.name == k));
+
+                animationsToExport = animations;
+
+                Blockbench.export({
+                    type: "Java File",
+                    extensions: ["java"],
+                    name: createFileName(Project.name),
+                    content: createFileText(),
+                });
+            },
+        })
+        form.select_all_none = {
+            type: 'buttons',
+            buttons: ['generic.select_all', 'generic.select_none'],
+            click(index) {
+                let values = {};
+                keys.forEach(key => values[key.hashCode()] = (index == 0));
+                dialog.setFormValues(values);
+            }
+        }
+        dialog.show();
+    }
+
     // Creates the text for the exported file
     function createFileText() {
-        let text = "public class NewAdvancedAnimations {";
+        let text = "public class " + createFileName(Project.name) + " {";
 
         // Registers all animations
-        for (const animation of Animation.all) {
+        for (const animation of animationsToExport) {
             text += "\n\npublic static final AdvancedAnimationDefinition " + animation.name.toUpperCase() + " = AdvancedAnimationDefinition.Builder.withLength(" + animation.length + "F)";          
 
             // Adds animations for all animators
@@ -135,6 +178,27 @@ Plugin.register("advanced_animation_exporter", {
 
         // Changes references to Math to references to the vanilla Mth class
         text = text.replaceAll("Math", "Mth");
+
+        return text;
+    }
+
+    // Creates a name for the file that matches the normal java file naming convention
+    function createFileName(value) {
+        let text = "";
+
+        // Changes the first character and all letters after underscores to be upper case
+        for (let i = 0; i < value.length; i++) {
+            if (i == 0 || text.charAt(i - 1) == "_") {
+                text += value.charAt(i).toUpperCase();
+            } else {
+                text += value.charAt(i);
+            }
+        }
+
+        // Removes all underscores
+        text = text.replaceAll("_", "");
+
+        text += "AdvancedAnimations";
 
         return text;
     }
