@@ -1,6 +1,9 @@
 (function () {
 
     let animationsToExport = [];
+    let fileName = "";
+    let filePackage = "";
+    let advancedAnimationsPackage = "";
 
 // Registers the plugin
 Plugin.register("advanced_animation_exporter", {
@@ -43,36 +46,33 @@ Plugin.register("advanced_animation_exporter", {
     },
 });
 
-    // Allows the user to choose the animations to be exported
     function chooseAnimationsToExport() {
         let form = {};
         let keys = [];
         let animations = Animation.all.slice();
+
+        form[0] = { label: "\n(It's recommended to split animations into multiple files if a high amount of animations or long and complicated animations are being used)", type: 'radio', full_width: true, nocolon: true };
+
         if (Format.animation_files) animations.sort((a1, a2) => a1.path.hashCode() - a2.path.hashCode());
         animations.forEach(animation => {
             let key = animation.name;
             keys.push(key)
-            form[key.hashCode()] = { label: key, type: 'checkbox', value: true };
+            form[1 + key.hashCode()] = { label: key, type: 'checkbox', value: true };
         })
 
         // Creates the dialog box
         let dialog = new Dialog("select_animations", {
             id: "select_animations",
             title: "Select Animations to Export",
+            width: 750,
             form,
             onConfirm(form_result) {
                 dialog.hide();
-                keys = keys.filter(key => form_result[key.hashCode()]);
+                keys = keys.filter(key => form_result[1 + key.hashCode()]);
                 let animations = keys.map(k => Animation.all.find(anim => anim.name == k));
-
                 animationsToExport = animations;
 
-                Blockbench.export({
-                    type: "Java File",
-                    extensions: ["java"],
-                    name: createFileName(Project.name),
-                    content: createFileText(),
-                });
+                chooseExportSettings();
             },
         })
         form.select_all_none = {
@@ -87,9 +87,46 @@ Plugin.register("advanced_animation_exporter", {
         dialog.show();
     }
 
+    // Allows the user to choose the animations to be exported
+    function chooseExportSettings() {
+        let form = {};
+
+        form[0] = { label: "File name", type: 'textarea', value: createFileName(Project.name), height: 35 };
+        form[1] = { label: "File package", type: 'textarea', value: "com.me.mymod.animation", height: 35 };
+        form[2] = { label: "Advanced Animation Utils package", type: 'textarea', value: "advanced_animation_utils", height: 35 };       
+
+        // Creates the dialog box
+        let dialog = new Dialog("export_settings", {
+            id: "export_settings",
+            title: "Export Settings",
+            width: 750,
+            form,
+            onConfirm(form_result) {
+                dialog.hide();             
+                fileName = form_result[0];
+                filePackage = form_result[1];
+                advancedAnimationsPackage = form_result[2];
+
+                Blockbench.export({
+                    type: "Java File",
+                    extensions: ["java"],
+                    name: fileName,
+                    content: createFileText(),
+                });
+            },
+        })
+        dialog.show();
+    }   
+
     // Creates the text for the exported file
     function createFileText() {
-        let text = "public class " + createFileName(Project.name) + " {";
+        let text = "package " + filePackage + ";\n";
+        text += "\nimport " + advancedAnimationsPackage + ".animation_utils.model_animations.AdvancedAnimationChannel;";
+        text += "\nimport " + advancedAnimationsPackage + ".animation_utils.model_animations.AdvancedAnimationDefinition;";
+        text += "\nimport " + advancedAnimationsPackage + ".animation_utils.model_animations.AdvancedAnimationInstance;";
+        text += "\nimport " + advancedAnimationsPackage + ".animation_utils.model_animations.AdvancedKeyframe;";
+        text += "\nimport java.lang.Math;";
+        text += "\n\npublic class " + fileName + " {";
 
         // Registers all animations
         for (const animation of animationsToExport) {
@@ -175,9 +212,6 @@ Plugin.register("advanced_animation_exporter", {
         if (text.length <= 0 || text == "" || text == "\n") {
             text = "0";
         }
-
-        // Changes references to Math to references to the vanilla Mth class
-        text = text.replaceAll("Math", "Mth");
 
         return text;
     }
