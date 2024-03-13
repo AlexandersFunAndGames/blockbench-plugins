@@ -5,6 +5,8 @@
     let filePackage = "";
     let advancedAnimationsPackage = "";
 
+    let usingJsonSystem = true;
+        
 // Registers the plugin
 Plugin.register("advanced_animation_exporter", {
     title: "Alexander's Advanced Animation Exporter",
@@ -21,7 +23,6 @@ Plugin.register("advanced_animation_exporter", {
         // Adds Animation Mode and Display Mode to the Modded Entity format
         Formats.modded_entity.animation_mode = true;
         Formats.modded_entity.display_mode = true;
-        //MenuBar.menus.get("export_advanced_animations");
 
         // Adds the plugin's menu button
         menuButton = new Action("export_advanced_animations", {
@@ -31,7 +32,7 @@ Plugin.register("advanced_animation_exporter", {
             condition: () => Format.animation_mode,
 
             click() {
-                chooseAnimationsToExport();
+                chooseAnimationSystem();
             },
         });
         MenuBar.addAction(menuButton, "file.export");
@@ -46,18 +47,38 @@ Plugin.register("advanced_animation_exporter", {
     },
 });
 
+    function chooseAnimationSystem() {
+        let form = {};
+
+        form[0] = { label: "Export as JSON file", type: 'checkbox', value: true};
+
+        // Creates the dialog box
+        let dialog = new Dialog("export_settings", {
+            id: "export_settings",
+            title: "Export Settings",
+            width: 750,
+            form,
+            onConfirm(form_result) {
+                dialog.hide();
+                usingJsonSystem = form_result[0];
+
+                chooseAnimationsToExport();
+            },
+        })
+        dialog.show();
+    }
+
+    // Allows the user to choose the animations to be exported
     function chooseAnimationsToExport() {
         let form = {};
         let keys = [];
         let animations = Animation.all.slice();
 
-        form[0] = { label: "\n(It's recommended to split animations into multiple files if a high amount of animations or long and complicated animations are being used)", type: 'radio', full_width: true, nocolon: true };
-
         if (Format.animation_files) animations.sort((a1, a2) => a1.path.hashCode() - a2.path.hashCode());
         animations.forEach(animation => {
             let key = animation.name;
             keys.push(key)
-            form[1 + key.hashCode()] = { label: key, type: 'checkbox', value: true };
+            form[key.hashCode()] = { label: key, type: 'checkbox', value: true };
         })
 
         // Creates the dialog box
@@ -68,11 +89,20 @@ Plugin.register("advanced_animation_exporter", {
             form,
             onConfirm(form_result) {
                 dialog.hide();
-                keys = keys.filter(key => form_result[1 + key.hashCode()]);
+                keys = keys.filter(key => form_result[key.hashCode()]);
                 let animations = keys.map(k => Animation.all.find(anim => anim.name == k));
                 animationsToExport = animations;
 
-                chooseExportSettings();
+                if (usingJsonSystem) {
+                    Blockbench.export({
+                        type: "JSON File",
+                        extensions: ["json"],
+                        name: Project.name,
+                        content: createJsonFileText(),
+                    });
+                } else {
+                    chooseExportSettings();
+                }
             },
         })
         form.select_all_none = {
@@ -87,7 +117,6 @@ Plugin.register("advanced_animation_exporter", {
         dialog.show();
     }
 
-    // Allows the user to choose the animations to be exported
     function chooseExportSettings() {
         let form = {};
 
@@ -116,7 +145,87 @@ Plugin.register("advanced_animation_exporter", {
             },
         })
         dialog.show();
-    }   
+    }
+
+    function createJsonFileText() {
+        let text = "{";
+
+        // Registers all animations
+        for (const animation of animationsToExport) {
+            text += "\n\"" + animation.name + "\": {";
+            text += "\n\"length\": " + animation.length + ",";
+            text += "\n\"looping\": " + (animation.loop == "loop" ? true : false) + ",";
+            text += "\n\"bones\": [";
+            // Adds animations for all animators
+            for (const index in animation.animators) {
+                const animator = animation.animators[index];
+                if (!(animator instanceof BoneAnimator) || !(animator.rotation.length || animator.position.length || animator.scale.length)) continue;
+
+                text += "\n{";
+                text += "\n\"name\": \"" + animator.name + "\",";
+                text += "\n\"bone_animations\": [";
+                // Adds animations for each target
+                text += createBoneAnimation(animator.rotation, "rotation");
+                text += createBoneAnimation(animator.position, "position");
+                text += createBoneAnimation(animator.scale, "scale");
+                text = text.substring(0, text.length - 1);
+                text += "\n]";
+                text += "\n},";
+            }
+            text = text.substring(0, text.length - 1);
+            text += "\n]";
+            text += "\n},";
+        }
+        text = text.substring(0, text.length - 1);
+
+        text += "\n}";
+
+        return text;
+    }
+
+    function createBoneAnimation(target, targetName) {
+        let text = "";
+        let targetKeyframes = [];
+
+        if (target.length) {
+            text += "\n{";
+            text += "\n\"target\": \"" + targetName + "\",";
+            text += "\n\"keyframes\": [";
+            // Sorts all keyframes in chronological order
+            for (const keyframe of target) {
+                targetKeyframes.push(keyframe);
+            }
+            targetKeyframes.sort((a, b) => a.time - b.time)
+
+            // Adds all keyframes
+            for (const keyframe of targetKeyframes) {
+                let x = keyframe.data_points[0].x.toString();
+                let y = keyframe.data_points[0].y.toString();
+                let z = keyframe.data_points[0].z.toString();
+                text += createStringKeyframe(keyframe.time, x, y, z, keyframe.interpolation);
+            }
+            text = text.substring(0, text.length - 1);
+            text += "\n]";
+            text += "\n},";
+        }
+
+        return text;
+    }
+
+    function createStringKeyframe(time, x, y, z, interpolation) {
+        let text = "";
+
+        text += "\n{";
+        text += "\n\"timestamp\": " + time + ",";
+        text += "\n\"xValue\": \"" + x + "\",";
+        text += "\n\"yValue\": \"" + y + "\",";
+        text += "\n\"zValue\": \"" + z + "\",";
+        text += "\n\"interpolation\": \"" + interpolation + "\"";
+        text += "\n},";
+        text.replaceAll("query.");
+
+        return text;
+    }
 
     // Creates the text for the exported file
     function createFileText() {
